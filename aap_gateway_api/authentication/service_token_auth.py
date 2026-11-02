@@ -107,6 +107,10 @@ class ServiceTokenAuthentication(BaseAuthentication):
                 setattr(user, 'resource_api_actions', ['retrieve'])
             return True
 
+        # Allow services to call EDA logs purge endpoint
+        if request.path == '/api/eda/v1/logs/purge/' and request.method.lower() == 'post':
+            return True
+
         for path_info in self.authorized_paths:
             if len(path_info) != 3:
                 logger.error(f"Invalid tuple in authorized_paths: {path_info}, it should have 3 components")
