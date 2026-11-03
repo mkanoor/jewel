@@ -245,6 +245,8 @@ class _ExternalAuth:
 
             user = None
 
+        logger.error(f"try_authenticate_request: path={self.request_path}, user={user}, auth={self.drf_request.auth}, is_internal={self.is_internal_route}")
+
         if self.is_internal_route:
             if self.drf_request.auth != SERVICE_TOKEN_AUTH_STRING:
                 return self._return_no_auth_with_reason("User is not authorized to reach internal route", code=16, http_status_code=401)
@@ -252,6 +254,7 @@ class _ExternalAuth:
                 return self._return_no_authentication_required()
 
         if not user or not user.pk:
+            logger.error(f"try_authenticate_request: returning not_authenticated for path={self.request_path}, user={user}, user.pk={getattr(user, 'pk', 'NO USER')}")
             return self._return_not_authenticated()
 
         if scope_denied_response := self._check_oauth2_scope_permission(user):
@@ -261,6 +264,7 @@ class _ExternalAuth:
         header_val = self.get_jwt_for_user(user)
 
         self.headers.append(HeaderValueOption(header=HeaderValue(key=header_name, value=header_val)))
+        logger.error(f"Added {header_name} header for user {user.username} to {self.request_id} {self.request_path}")
         return self._return_authenticated(user.username)
 
     def Check(self, request, context):  # NOSONAR -- Envoy's gRPC service requires this method name.

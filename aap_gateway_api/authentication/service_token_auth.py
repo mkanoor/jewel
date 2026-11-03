@@ -8,6 +8,8 @@ from rest_framework.exceptions import APIException
 
 from aap_gateway_api.common.authentication import SERVICE_TOKEN_AUTH_STRING
 from aap_gateway_api.models.migrate_data import MigrateServiceDataHasRan
+from aap_gateway_api.utils.jwt_token import create_signed_jwt
+from aap_gateway_api.utils.preferences import get_preference_value
 from aap_gateway_api.utils.service_token import validate_service_token
 
 logger = logging.getLogger('aap.gateway.authentication.service_token_auth')
@@ -41,10 +43,14 @@ class ServiceTokenAuthentication(BaseAuthentication):
     ]
 
     def authenticate(self, request):
+        logger.warning(f"ServiceTokenAuthentication.authenticate called for {request.path}")
         token = request.headers.get(service_token_header, None)
 
         if token is None:
+            logger.warning(f"No token found in {service_token_header} header")
             return None
+
+        logger.warning(f"Token found, validating for path {request.path}")
 
         # Check if migration has completed before allowing service authentication
         if not MigrateServiceDataHasRan.has_migration_completed():
@@ -53,6 +59,7 @@ class ServiceTokenAuthentication(BaseAuthentication):
 
         try:
             token_data = validate_service_token(token)
+            logger.warning(f"Token validated successfully")
 
             user = token_data["user"]
             service = token_data["service_cluster"]
@@ -61,15 +68,26 @@ class ServiceTokenAuthentication(BaseAuthentication):
             # Attach service_cluster to request so downstream views can check service authorization.
             request.service_cluster = service
 
-            if self.is_user_authorized(request, user, service, payload):
+            is_authorized = self.is_user_authorized(request, user, service, payload)
+            logger.warning(f"is_user_authorized returned: {is_authorized} for path {request.path}")
+
+            if is_authorized:
                 logger.warning(f"User is authorized to access {request.path}.")
+                # Add X-DAB-JW-TOKEN header for service requests
+                header_name = get_preference_value('proxy', 'gateway_token_name')
+                header_val = create_signed_jwt(user)
+                request.META[f'HTTP_{header_name.upper().replace("-", "_")}'] = header_val
+                logger.warning(f"Added {header_name} header for service token auth to {request.path} for user {user.username}")
                 return (user, SERVICE_TOKEN_AUTH_STRING)
             else:
                 logger.warning(f"User not authorized to access {request.path}.")
                 return None
 
-        except ValidationError:
-            logger.exception("Invalid token.")
+        except ValidationError as e:
+            logger.exception(f"Invalid token: {e}")
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error in authenticate: {e}")
             return None
 
     def is_user_authorized(self, request, user, service, token_data):
@@ -109,6 +127,7 @@ class ServiceTokenAuthentication(BaseAuthentication):
 
         # Allow services to call EDA logs purge endpoint
         if request.path == '/api/eda/v1/logs/purge/' and request.method.lower() == 'post':
+            logger.warning(f"EDA logs purge endpoint authorized for user {user.username}")
             return True
 
         for path_info in self.authorized_paths:
