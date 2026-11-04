@@ -1,0 +1,19 @@
+FROM quay.io/aap/ansible-automation-platform-devel/gateway-rhel9:latest
+
+USER root
+
+# Remove cached files from the base image
+RUN find /opt/aap-gateway/src/aap_gateway_api -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+# Copy the modified source code with service token auth changes
+COPY aap_gateway_api /opt/aap-gateway/src/aap_gateway_api/
+
+# Ensure correct permissions before compiling
+RUN chown -R 1000:0 /opt/aap-gateway/src/aap_gateway_api && \
+    chmod -R g=u /opt/aap-gateway/src/aap_gateway_api
+
+# Rebuild the Python bytecode cache for the updated code
+RUN /opt/aap-gateway/venv/bin/python -m compileall /opt/aap-gateway/src/aap_gateway_api/
+
+# Switch back to the gateway user
+USER 1000
