@@ -98,8 +98,11 @@ class _ExternalAuth:
     def _return_authenticated(self, username):
         logger.debug(f"User {username} successfully authenticated for {self.request_id}")
 
-        # Remove original authorization header unless we're overriding it so the service does not see it
+        # Remove original authorization headers unless we're overriding them so the service does not see them
         headers_to_remove = [] if any(x for x in self.headers if x.header.key == 'Authorization') else ['Authorization']
+        # Always remove service token header since we've replaced it with X-DAB-JW-TOKEN
+        if 'X-ANSIBLE-SERVICE-AUTH' not in [x.header.key for x in self.headers]:
+            headers_to_remove.append('X-ANSIBLE-SERVICE-AUTH')
 
         self._add_trusted_proxy_header()
         response = external_auth_pb2.OkHttpResponse(
