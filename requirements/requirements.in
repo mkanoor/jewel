@@ -1,3 +1,4 @@
+colorama  # For colored terminal output in logging
 cryptography >= 46.0.7 # CVE-2026-39892
 Django>=5.2.8,<5.3 # Django 5.2 LTS - see AAP-55610
 djangorestframework>=3.18.2  # see AAP-99716
